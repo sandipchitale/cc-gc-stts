@@ -47138,13 +47138,13 @@ var require_file = __commonJS({
       const {
         cache,
         flags = "r",
-        mode = 438
+        mode: mode2 = 438
         // =0666
       } = opts;
       try {
         const filepath = (0, url_1.fileURLToPath)(uri);
         debug7("Normalized pathname: %o", filepath);
-        const fdHandle = await fs_1.promises.open(filepath, flags, mode);
+        const fdHandle = await fs_1.promises.open(filepath, flags, mode2);
         const fd = fdHandle.fd;
         const stat = await fdHandle.stat();
         if (cache && cache.stat && stat && isNotModified(cache.stat, stat)) {
@@ -47203,8 +47203,8 @@ var require_parseControlResponse = __commonJS({
           messages.push(lines.slice(startAt, i + 1).join(LF));
         }
       }
-      const rest = tokenRegex ? lines.slice(startAt).join(LF) + LF : "";
-      return { messages, rest };
+      const rest2 = tokenRegex ? lines.slice(startAt).join(LF) + LF : "";
+      return { messages, rest: rest2 };
     }
     function isSingleLine(line) {
       return /^\d\d\d(?:$| )/.test(line);
@@ -72035,19 +72035,19 @@ var require_extract_zip = __commonJS({
           this.opts.onEntry(entry, this.zipfile);
         }
         const dest = path15.join(this.opts.dir, entry.fileName);
-        const mode = entry.externalFileAttributes >> 16 & 65535;
+        const mode2 = entry.externalFileAttributes >> 16 & 65535;
         const IFMT = 61440;
         const IFDIR = 16384;
         const IFLNK = 40960;
-        const symlink = (mode & IFMT) === IFLNK;
-        let isDir = (mode & IFMT) === IFDIR;
+        const symlink = (mode2 & IFMT) === IFLNK;
+        let isDir = (mode2 & IFMT) === IFDIR;
         if (!isDir && entry.fileName.endsWith("/")) {
           isDir = true;
         }
         const madeBy = entry.versionMadeBy >> 8;
         if (!isDir) isDir = madeBy === 0 && entry.externalFileAttributes === 16;
         debug7("extracting entry", { filename: entry.fileName, isDir, isSymlink: symlink });
-        const procMode = this.getExtractedMode(mode, isDir) & 511;
+        const procMode = this.getExtractedMode(mode2, isDir) & 511;
         const destDir = isDir ? dest : path15.dirname(dest);
         const mkdirOptions = { recursive: true };
         if (isDir) {
@@ -72067,25 +72067,25 @@ var require_extract_zip = __commonJS({
         }
       }
       getExtractedMode(entryMode, isDir) {
-        let mode = entryMode;
-        if (mode === 0) {
+        let mode2 = entryMode;
+        if (mode2 === 0) {
           if (isDir) {
             if (this.opts.defaultDirMode) {
-              mode = parseInt(this.opts.defaultDirMode, 10);
+              mode2 = parseInt(this.opts.defaultDirMode, 10);
             }
-            if (!mode) {
-              mode = 493;
+            if (!mode2) {
+              mode2 = 493;
             }
           } else {
             if (this.opts.defaultFileMode) {
-              mode = parseInt(this.opts.defaultFileMode, 10);
+              mode2 = parseInt(this.opts.defaultFileMode, 10);
             }
-            if (!mode) {
-              mode = 420;
+            if (!mode2) {
+              mode2 = 420;
             }
           }
         }
-        return mode;
+        return mode2;
       }
     };
     module.exports = async function(zipPath, opts) {
@@ -73637,7 +73637,7 @@ var require_headers = __commonJS({
     exports.decode = function decode(buf, filenameEncoding, allowUnknownFormat) {
       let typeflag = buf[156] === 0 ? 0 : buf[156] - ZERO_OFFSET;
       let name = decodeStr(buf, 0, 100, filenameEncoding);
-      const mode = decodeOct(buf, 100, 8);
+      const mode2 = decodeOct(buf, 100, 8);
       const uid = decodeOct(buf, 108, 8);
       const gid = decodeOct(buf, 116, 8);
       const size = decodeOct(buf, 124, 12);
@@ -73662,7 +73662,7 @@ var require_headers = __commonJS({
       if (typeflag === 0 && name && name[name.length - 1] === "/") typeflag = 5;
       return {
         name,
-        mode,
+        mode: mode2,
         uid,
         gid,
         size,
@@ -74380,8 +74380,8 @@ var require_pack = __commonJS({
     module.exports = function pack(opts) {
       return new Pack(opts);
     };
-    function modeToType(mode) {
-      switch (mode & constants.S_IFMT) {
+    function modeToType(mode2) {
+      switch (mode2 & constants.S_IFMT) {
         case constants.S_IFBLK:
           return "block-device";
         case constants.S_IFCHR:
@@ -74656,13 +74656,13 @@ var require_tar_fs = __commonJS({
         const chmod = link ? xfs.lchmod : xfs.chmod;
         const chown = link ? xfs.lchown : xfs.chown;
         if (!chmod) return cb();
-        const mode = (header.mode | (header.type === "directory" ? dmode : fmode)) & umask;
+        const mode2 = (header.mode | (header.type === "directory" ? dmode : fmode)) & umask;
         if (chown && own) chown.call(xfs, name, header.uid, header.gid, onchown);
         else onchown(null);
         function onchown(err) {
           if (err) return cb(err);
           if (!chmod) return cb();
-          chmod.call(xfs, name, mode, cb);
+          chmod.call(xfs, name, mode2, cb);
         }
       }
       function mkdirfix(name, opts2, cb) {
@@ -80533,8 +80533,8 @@ var init_LaunchOptions = __esm({
   }
 });
 
-// src/tts.ts
-import { mkdirSync as mkdirSync3, rmSync } from "node:fs";
+// src/stts.ts
+import { rmSync, mkdirSync as mkdirSync3 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
 import path14 from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
@@ -91273,22 +91273,95 @@ async function connectToChrome(port) {
   });
 }
 
-// src/tts.ts
+// src/stts.ts
 var __dirname3 = path14.dirname(fileURLToPath2(import.meta.url));
-async function main() {
-  program.name("tts").description("Text to Speech GUI").version("1.0.0").option("--title <title>", "Title of the page", "Speak").option("--action <label>", "Label for the action button", "Stop & Exit").option("--oneshot", "Just speak the passed in text and exit").argument("[...]", "Text to speak").helpOption("-h, --help", "Display help for command").parse(process.argv);
-  const options = program.opts();
-  let textToSpeak = (program.args || []).join(" ");
-  if (!process.stdin.isTTY) {
-    const chunks = [];
-    for await (const chunk of process.stdin) {
-      chunks.push(chunk);
-    }
-    const stdinText = Buffer.concat(chunks).toString("utf-8");
-    if (stdinText) {
-      textToSpeak = textToSpeak ? `${textToSpeak}
+async function readStdin() {
+  if (process.stdin.isTTY) return "";
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+}
+async function runStt(argv) {
+  const sub = program.name("stts stt").description("Speech to Text GUI").version("1.0.0").option("--title <title>", "Title of the page", "Type or dictate").option("--action <label>", "Label for the complete button", "Send").option("--start-recording", "Start in recording mode").argument("[text...]", "Initial text").helpOption("-h, --help", "Display help for command").parse(argv, { from: "user" });
+  const options = sub.opts();
+  let initialText = (sub.args || []).join(" ");
+  const stdinText = await readStdin();
+  if (stdinText) {
+    initialText = initialText ? `${initialText}
 ${stdinText}` : stdinText;
+  }
+  const uiPath = path14.resolve(__dirname3, "stt_ui.html");
+  const url = `file://${uiPath}`;
+  const tempDir = path14.join(tmpdir3(), `ai-sidekick-prompt-${Date.now()}`);
+  mkdirSync3(tempDir, { recursive: true });
+  let chrome2;
+  let browser;
+  try {
+    const userDataDir = path14.join(tempDir, "profile");
+    mkdirSync3(userDataDir, { recursive: true });
+    chrome2 = await launchChrome({
+      startingUrl: "about:blank",
+      userDataDir,
+      chromeFlags: [
+        `--app=${url}`,
+        "--window-size=800,600",
+        "--allow-file-access-from-files"
+      ]
+    });
+    browser = await connectToChrome(chrome2.port);
+    const [page] = await browser.pages();
+    page.on("console", (_msg) => {
+    });
+    const context2 = browser.defaultBrowserContext();
+    await context2.setPermission(url, {
+      permission: { name: "microphone" },
+      state: "granted"
+    });
+    async function cleanup() {
+      if (browser) await browser.disconnect();
+      if (chrome2) chrome2.kill();
+      try {
+        rmSync(tempDir, { recursive: true, force: true });
+      } catch (e) {
+      }
+      process.exit(0);
     }
+    await page.evaluateOnNewDocument((text, title, action, startRecording) => {
+      window.getInitialText = async () => text;
+      window.getInitialTitle = async () => title;
+      window.getInitialActionLabel = async () => action;
+      window.isStartRecording = async () => startRecording;
+    }, initialText, options.title, options.action, options.startRecording);
+    await page.exposeFunction("onComplete", (text) => {
+      process.stdout.write(text + "\n");
+      cleanup();
+    });
+    await page.exposeFunction("onCancel", () => {
+      cleanup();
+    });
+    page.on("close", () => {
+      cleanup();
+    });
+    await page.goto(url);
+    await page.bringToFront();
+    await new Promise(() => {
+    });
+  } catch (err) {
+    console.error("Failed to launch prompt:", err);
+    if (chrome2) chrome2.kill();
+    process.exit(1);
+  }
+}
+async function runTts(argv) {
+  const sub = program.name("stts tts").description("Text to Speech GUI").version("1.0.0").option("--title <title>", "Title of the page", "Speak").option("--action <label>", "Label for the action button", "Stop & Exit").option("--oneshot", "Just speak the passed in text and exit").argument("[text...]", "Text to speak").helpOption("-h, --help", "Display help for command").parse(argv, { from: "user" });
+  const options = sub.opts();
+  let textToSpeak = (sub.args || []).join(" ");
+  const stdinText = await readStdin();
+  if (stdinText) {
+    textToSpeak = textToSpeak ? `${textToSpeak}
+${stdinText}` : stdinText;
   }
   const uiPath = path14.resolve(__dirname3, "tts_ui.html");
   const url = `file://${uiPath}`;
@@ -91350,7 +91423,15 @@ ${stdinText}` : stdinText;
     process.exit(1);
   }
 }
-await main();
+var [mode, ...rest] = process.argv.slice(2);
+if (mode === "stt") {
+  await runStt(rest);
+} else if (mode === "tts") {
+  await runTts(rest);
+} else {
+  console.error("Usage: stts <stt|tts> [options] [text...]");
+  process.exit(1);
+}
 /*! Bundled license information:
 
 puppeteer-core/lib/esm/puppeteer/util/disposable.js:

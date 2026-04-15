@@ -6,12 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 const DIST_DIR = path.dirname(fileURLToPath(import.meta.url));
-const STT_SCRIPT = path.join(DIST_DIR, 'stt.mjs');
-const TTS_SCRIPT = path.join(DIST_DIR, 'tts.mjs');
+const STTS_SCRIPT = path.join(DIST_DIR, 'stts.mjs');
 
-function runChild(script: string, args: string[] = [], input?: string): Promise<string> {
+function runChild(mode: 'stt' | 'tts', args: string[] = [], input?: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [script, ...args], {
+    const child = spawn(process.execPath, [STTS_SCRIPT, mode, ...args], {
       stdio: ['pipe', 'pipe', 'inherit'],
     });
 
@@ -20,7 +19,7 @@ function runChild(script: string, args: string[] = [], input?: string): Promise<
     child.once('error', reject);
     child.once('close', (code) => {
       if (code !== 0 && code !== null) {
-        reject(new Error(`${path.basename(script)} exited with code ${code}`));
+        reject(new Error(`stts ${mode} exited with code ${code}`));
         return;
       }
       resolve(Buffer.concat(chunks).toString('utf8').trim());
@@ -41,7 +40,7 @@ server.registerTool(
     inputSchema: {},
   },
   async () => {
-    const text = await runChild(STT_SCRIPT);
+    const text = await runChild('stt');
     return { content: [{ type: 'text', text }] };
   }
 );
@@ -55,7 +54,7 @@ server.registerTool(
     },
   },
   async ({ text }) => {
-    await runChild(TTS_SCRIPT, ['--oneshot'], text);
+    await runChild('tts', ['--oneshot'], text);
     return { content: [{ type: 'text', text: 'Spoken.' }] };
   }
 );

@@ -35,8 +35,7 @@ commands/
   stts.toml            # /stts slash command for Gemini CLI
 src/
   stts-mcp-server.ts   # MCP server exposing `stt` and `tts` tools
-  stt.ts               # CLI that launches the STT dialog, prints transcript to stdout
-  tts.ts               # CLI that launches the TTS window and speaks input text
+  stts.ts              # CLI dispatching on first arg (`stt`|`tts`) to launch the right dialog
   stt_ui.html          # STT browser UI (Web Speech API recognition)
   tts_ui.html          # TTS browser UI (Web Speech API synthesis)
   chrome-sidekick.ts   # helpers to launch Chrome and connect via Puppeteer
@@ -48,8 +47,8 @@ dist/                  # built artifacts loaded by the plugin at runtime
 
 - `plugin.json` starts `dist/stts-mcp-server.mjs` as a stdio MCP server.
 - The server registers two tools:
-  - `stt` — spawns `dist/stt.mjs` as a child process; the STT UI writes the transcribed text to stdout, which is returned to the model.
-  - `tts` — spawns `dist/tts.mjs --oneshot`, piping the text to speak via stdin; the window speaks it and exits.
+  - `stt` — spawns `dist/stts.mjs stt` as a child process; the STT UI writes the transcribed text to stdout, which is returned to the model.
+  - `tts` — spawns `dist/stts.mjs tts --oneshot`, piping the text to speak via stdin; the window speaks it and exits.
 - The `/stts` command orchestrates a loop: call `stt`, if the result is empty print `Done.` and stop; otherwise forward the transcript to the model and pass the reply to `tts`.
 
 ## Build
@@ -59,7 +58,7 @@ npm install
 npm run build
 ```
 
-This bundles `src/stt.ts`, `src/tts.ts`, and `src/stts-mcp-server.ts` into `dist/*.mjs` with esbuild and copies the HTML UIs alongside them.
+This bundles `src/stts.ts` and `src/stts-mcp-server.ts` into `dist/*.mjs` with esbuild and copies the HTML UIs alongside them.
 
 ## Usage
 
