@@ -377,13 +377,13 @@
               <dt>new paragraph</dt><dd>Ends sentence, starts new paragraph</dd>
 
             </dl>
-          </div>
-          <div>
             <h4>Navigation</h4>
             <dl>
               <dt>go to start</dt><dd>Moves cursor to beginning</dd>
               <dt>go to end</dt><dd>Moves cursor to end</dd>
             </dl>
+          </div>
+          <div>
             <h4>Selection</h4>
             <dl>
               <dt>select all</dt><dd>Selects all text</dd>
@@ -394,6 +394,11 @@
             <dl>
               <dt>undo it</dt><dd>Undoes last action</dd>
               <dt>redo it</dt><dd>Redoes last undone action</dd>
+            </dl>
+            <h4>Control</h4>
+            <dl>
+              <dt>cancel prompt</dt><dd>Cancels prompt</dd>
+              <dt>send prompt</dt><dd>Sends prompt</dd>
             </dl>
           </div>
         </div>
@@ -497,7 +502,7 @@
       let inputTimeout;
 
       const COMMAND_REGEX =
-        /(\s*\binsert\s+comma)|(\s*\binsert\s+period)|(\s*\binsert\s+question\s+mark)|(\s*\binsert\s+exclamation\s+mark)|(\s*\binsert\s+tab)|(([,.?!])\s*new\s+paragraph)|(\s*\bnew\s+paragraph)|(\s*\bselect\s+all)|(\s*\bgo\s+to\s+start)|(\s*\bgo\s+to\s+end)|(\s*\bunselect\s+selection)|(\s*\bdelete\s+selection)|(\s*\bundo\s+it)|(\s*\bredo\s+it)/gi;
+        /(\s*\binsert\s+comma)|(\s*\binsert\s+period)|(\s*\binsert\s+question\s+mark)|(\s*\binsert\s+exclamation\s+mark)|(\s*\binsert\s+tab)|(([,.?!])\s*new\s+paragraph)|(\s*\bnew\s+paragraph)|(\s*\bselect\s+all)|(\s*\bgo\s+to\s+start)|(\s*\bgo\s+to\s+end)|(\s*\bunselect\s+selection)|(\s*\bdelete\s+selection)|(\s*\bundo\s+it)|(\s*\bredo\s+it)|(\s*\bcancel\s+prompt)|(\s*\bsend\s+prompt)/gi;
 
       function extractCommands(text) {
         const regex = new RegExp(COMMAND_REGEX.source, COMMAND_REGEX.flags);
@@ -530,6 +535,8 @@
           else if (match[13]) { deletesSelection = true; }
           else if (match[14]) { effects.push(() => document.execCommand("undo", false)); }
           else if (match[15]) { effects.push(() => document.execCommand("redo", false)); }
+          else if (match[16]) { cancel(); }
+          else if (match[17]) { submit(); }
 
           processedText += sub;
           replacements.push({ start: match.index, end: match.index + match[0].length, sub });
