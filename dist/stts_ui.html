@@ -299,7 +299,7 @@
         border-radius: 4px;
       }
 
-      #commands-btn {
+      #commands-btn, #tts-commands-btn {
         width: 32px;
         height: 32px;
         border-radius: 50%;
@@ -313,9 +313,33 @@
         line-height: 1;
       }
 
-      #commands-btn:hover {
+      #commands-btn:hover, #tts-commands-btn:hover {
         background: var(--hover-color);
         border-color: var(--accent-color);
+      }
+
+      #tts-dictate-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        padding: 0;
+        justify-content: center;
+        flex-shrink: 0;
+        background: var(--bg-color);
+        border: 1px solid var(--border-color);
+        color: var(--text-color);
+      }
+
+      #tts-dictate-btn:hover {
+        background: var(--hover-color);
+        border-color: var(--accent-color);
+      }
+
+      #tts-dictate-btn.recording {
+        background: var(--danger-color);
+        color: white;
+        border-color: var(--danger-color);
+        animation: pulse 1.5s infinite;
       }
 
       .commands-panel {
@@ -565,8 +589,32 @@
           id="output-text"
           placeholder="Type text here or wait for a response..."
         ></textarea>
+        <div class="commands-panel" id="tts-commands-panel">
+          <button class="close-panel" id="tts-close-panel" title="Close">&times;</button>
+          <h3>Voice Commands</h3>
+          <div class="commands-columns">
+            <div>
+              <h4>Playback</h4>
+              <dl>
+                <dt>play it</dt><dd>Play the response</dd>
+                <dt>stop it</dt><dd>Stop playback</dd>
+              </dl>
+              <h4>Control</h4>
+              <dl>
+                <dt>got it</dt><dd>Continue to next prompt</dd>
+              </dl>
+            </div>
+          </div>
+        </div>
         <div class="bottom-bar">
           <div class="status-area">
+            <button id="tts-dictate-btn" title="Click to dictate (Ctrl+R)" tabindex="-1">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+              </svg>
+            </button>
+            <button id="tts-commands-btn" title="Voice commands cheat sheet" tabindex="-1">&#x1f5e3;&#xfe0f;</button>
             <div class="visualizer" id="visualizer">
               <div class="bar" style="animation-delay: 0s"></div>
               <div class="bar" style="animation-delay: 0.1s"></div>
@@ -815,7 +863,11 @@
         window.onkeydown = (e) => {
           if (e.ctrlKey && e.key === 'r') {
             e.preventDefault();
-            toggleDictation();
+            if (currentMode === 'tts' && ttsToogleDictation) {
+              ttsToogleDictation();
+            } else {
+              toggleDictation();
+            }
           }
         };
 
@@ -895,12 +947,103 @@
       const ttsStatus = document.getElementById('tts-status');
       const ttsLabel = document.getElementById('tts-label');
       const bars = document.querySelectorAll('.bar');
+      const ttsDictateBtn = document.getElementById('tts-dictate-btn');
+      const ttsCommandsBtn = document.getElementById('tts-commands-btn');
+      const ttsCommandsPanel = document.getElementById('tts-commands-panel');
+      const ttsClosed = document.getElementById('tts-close-panel');
+
+      let ttsIsRecording = false;
+      let ttsToogleDictation = () => {};
 
       const synth = window.speechSynthesis;
       let currentUtterance = null;
       let hasStarted = false;
       let isOneshot = false;
       let isRestarting = false;
+
+      // TTS Commands
+      ttsCommandsBtn.onmousedown = (e) => e.preventDefault();
+      ttsCommandsBtn.onclick = () => ttsCommandsPanel.classList.toggle('open');
+      ttsClosed.onmousedown = (e) => e.preventDefault();
+      ttsClosed.onclick = () => ttsCommandsPanel.classList.remove('open');
+
+      document.addEventListener('mousedown', (e) => {
+        if (
+          ttsCommandsPanel.classList.contains('open') &&
+          !ttsCommandsPanel.contains(e.target) &&
+          !ttsCommandsBtn.contains(e.target)
+        ) {
+          ttsCommandsPanel.classList.remove('open');
+        }
+      });
+
+      const TTS_COMMAND_REGEX = /(\s*\bplay\s+it)|(\s*\bstop\s+it)|(\s*\bgot\s+it)/gi;
+
+      function extractTtsCommands(text) {
+        const regex = new RegExp(TTS_COMMAND_REGEX.source, TTS_COMMAND_REGEX.flags);
+        const effects = [];
+        let match;
+
+        while ((match = regex.exec(text)) !== null) {
+          if (match[1]) { effects.push(() => playBtn.click()); }
+          else if (match[2]) { effects.push(() => stopBtn.click()); }
+          else if (match[3]) { effects.push(() => gotitBtn.click()); }
+        }
+
+        return { effects };
+      }
+
+      // TTS Speech Recognition
+      if (speechRecognition) {
+        const ttsRecognition = new speechRecognition();
+        ttsRecognition.continuous = true;
+        ttsRecognition.interimResults = true;
+
+        ttsToogleDictation = () => {
+          if (ttsIsRecording) {
+            ttsRecognition.stop();
+          } else {
+            ttsRecognition.start();
+          }
+        };
+
+        ttsDictateBtn.onmousedown = (e) => e.preventDefault();
+        ttsDictateBtn.onclick = ttsToogleDictation;
+
+        ttsRecognition.onstart = () => {
+          ttsIsRecording = true;
+          ttsDictateBtn.classList.add('recording');
+          ttsContainer.classList.add('listening');
+        };
+
+        ttsRecognition.onend = () => {
+          ttsIsRecording = false;
+          ttsDictateBtn.classList.remove('recording');
+          ttsContainer.classList.remove('listening');
+        };
+
+        ttsRecognition.onresult = (event) => {
+          let finalTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            }
+          }
+          if (finalTranscript) {
+            const { effects } = extractTtsCommands(finalTranscript);
+            if (effects.length) {
+              setTimeout(() => effects.forEach(fn => fn()), 0);
+            }
+          }
+        };
+
+        ttsRecognition.onerror = (event) => {
+          console.error('TTS Speech recognition error', event.error);
+        };
+      } else {
+        ttsDictateBtn.style.display = 'none';
+        ttsCommandsBtn.style.display = 'none';
+      }
 
       refreshBtn.onclick = () => {
         synth.cancel();
@@ -930,6 +1073,7 @@
 
       gotitBtn.onclick = async () => {
         synth.cancel();
+        if (ttsIsRecording) { try { ttsToogleDictation(); } catch {} }
         gotitBtn.disabled = true;
         await fetch('/api/close', { method: 'POST' });
         resetToIdle();
@@ -1022,6 +1166,7 @@
         currentMode = null;
         synth.cancel();
         if (isRecording) { try { toggleDictation(); } catch {} }
+        if (ttsIsRecording) { try { ttsToogleDictation(); } catch {} }
 
         sttPanelEl.classList.remove('active-mode');
         sttPanelEl.classList.add('inactive');
@@ -1031,8 +1176,19 @@
         ttsPanelEl.classList.add('inactive');
         ttsLabel.classList.remove('active');
 
+        // Reset button visibility
+        dictateBtn.style.opacity = '0.4';
+        dictateBtn.style.pointerEvents = 'none';
+        commandsBtn.style.opacity = '0.4';
+        commandsBtn.style.pointerEvents = 'none';
+        ttsDictateBtn.style.opacity = '0.4';
+        ttsDictateBtn.style.pointerEvents = 'none';
+        ttsCommandsBtn.style.opacity = '0.4';
+        ttsCommandsBtn.style.pointerEvents = 'none';
+
         hasStarted = false;
         ttsContainer.classList.remove('speaking');
+        ttsContainer.classList.remove('listening');
         bars.forEach((b) => b.classList.remove('animating'));
         playBtn.disabled = false;
         stopBtn.disabled = true;
@@ -1051,6 +1207,12 @@
         ttsPanelEl.classList.add('inactive');
         ttsPanelEl.classList.remove('active-mode');
         ttsLabel.classList.remove('active');
+
+        // Enable TTS buttons in inactive state
+        ttsDictateBtn.style.opacity = '0.4';
+        ttsDictateBtn.style.pointerEvents = 'none';
+        ttsCommandsBtn.style.opacity = '0.4';
+        ttsCommandsBtn.style.pointerEvents = 'none';
 
         input.value = config.initialText || '';
         if (config.initialText) processInput(false);
@@ -1071,6 +1233,18 @@
         sttPanelEl.classList.add('inactive');
         sttPanelEl.classList.remove('active-mode');
         sttLabel.classList.remove('active');
+
+        // Enable TTS buttons in active state
+        ttsDictateBtn.style.opacity = '1';
+        ttsDictateBtn.style.pointerEvents = 'auto';
+        ttsCommandsBtn.style.opacity = '1';
+        ttsCommandsBtn.style.pointerEvents = 'auto';
+
+        // Disable STT buttons in inactive state
+        dictateBtn.style.opacity = '0.4';
+        dictateBtn.style.pointerEvents = 'none';
+        commandsBtn.style.opacity = '0.4';
+        commandsBtn.style.pointerEvents = 'none';
 
         ttsTextarea.value = config.text || '';
         if (config.title) document.title = config.title;
