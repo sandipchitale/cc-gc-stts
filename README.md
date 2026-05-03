@@ -15,6 +15,7 @@ Talk to **Claude Code** or **Gemini CLI** and hear them talk back. This project 
 - 🔄 **Conversational Loop:** Use the `/stts` command for a continuous voice-driven session.
 - 🚀 **Persistent Daemon:** Fast startup using a reusable Chrome window.
 - 🛠️ **Cross-Platform:** Works with both Claude Code and Gemini CLI.
+- 🕘 **History:** Recall past prompts and responses from a dropdown above each panel, or with `Alt+↑` / `Alt+↓`.
 
 ## 🏗️ How It Works
 
@@ -77,8 +78,19 @@ Both STT and TTS modes support voice-activated commands for a hands-free experie
 - `Ctrl+R`: Toggle recording/playback side panel.
 - `Enter`: Send prompt (Talk side).
 - `Escape`: Stop recording or close the commands panel.
+- `Alt+↑` / `Alt+↓`: Cycle through prompt or response history when the textarea is focused.
 
 ![Voice command side panel](screenshots/stts-voice-commands.png)
+
+## 🕘 Prompt & Response History
+
+Each panel has a **History** bar above its textarea:
+
+- **Talk** stores every submitted prompt; **Listen** stores every response received from the model.
+- Pick an entry from the dropdown to load it into the textarea — fully editable. Hit **Enter** / **Send** to resubmit a prompt, or **Play** to replay a response.
+- `Alt+↑` walks back through history; `Alt+↓` walks forward (your in-progress draft is preserved and restored at the bottom of the stack).
+- History persists across sessions in `localStorage`, capped at 50 entries per side. Consecutive duplicates are not stored.
+- Use the **Clear** button to wipe one side's history.
 
 ## 🛠️ Development & Manual Install
 

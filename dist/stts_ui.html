@@ -501,6 +501,60 @@
         color: #80868b;
         cursor: not-allowed;
       }
+
+      /* -- History -- */
+      .history-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border-color);
+        background: var(--hover-color);
+        flex-shrink: 0;
+      }
+
+      .history-label {
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #80868b;
+        flex-shrink: 0;
+      }
+
+      .history-select {
+        flex: 1;
+        min-width: 0;
+        font-size: 12px;
+        padding: 4px 6px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        font-family: var(--font-stack);
+        cursor: pointer;
+      }
+
+      .history-clear {
+        background: transparent;
+        color: #80868b;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 11px;
+        padding: 0 8px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+
+      .history-clear:hover {
+        background: var(--bg-color);
+        color: var(--danger-color);
+        border-color: var(--danger-color);
+      }
+
+      .panel.inactive > .container .history-bar {
+        pointer-events: auto;
+      }
     </style>
   </head>
   <body>
@@ -509,6 +563,11 @@
     <div class="panel" id="stt-panel">
       <div class="panel-label" id="stt-label">Talk</div>
       <div class="container" id="stt-container">
+        <div class="history-bar">
+          <span class="history-label">History</span>
+          <select class="history-select" id="prompt-history" title="Load a past prompt (Alt+Up / Alt+Down also works)"></select>
+          <button class="history-clear" id="prompt-history-clear" title="Clear prompt history" tabindex="-1">Clear</button>
+        </div>
         <textarea
           id="prompt-input"
           placeholder="Enter your prompt..."
@@ -586,6 +645,11 @@
     <div class="panel" id="tts-panel">
       <div class="panel-label" id="tts-label">Listen</div>
       <div class="container" id="tts-container">
+        <div class="history-bar">
+          <span class="history-label">History</span>
+          <select class="history-select" id="response-history" title="Load a past response (Alt+Up / Alt+Down also works)"></select>
+          <button class="history-clear" id="response-history-clear" title="Clear response history" tabindex="-1">Clear</button>
+        </div>
         <textarea
           id="output-text"
           placeholder="Type text here or wait for a response..."
@@ -701,6 +765,112 @@
       };
 
       /* ====================================
+         History (prompts + responses)
+         ==================================== */
+      const HIST_PROMPTS = '__stts__history_prompts';
+      const HIST_RESPONSES = '__stts__history_responses';
+      const HIST_MAX = 50;
+
+      function loadHistory(key) {
+        try {
+          const raw = localStorage.getItem(key);
+          const arr = raw ? JSON.parse(raw) : [];
+          return Array.isArray(arr) ? arr : [];
+        } catch {
+          return [];
+        }
+      }
+
+      function saveHistory(key, arr) {
+        const trimmed = arr.slice(-HIST_MAX);
+        localStorage.setItem(key, JSON.stringify(trimmed));
+      }
+
+      function addToHistory(key, value) {
+        const v = (value || '').trim();
+        if (!v) return;
+        const arr = loadHistory(key);
+        if (arr.length && arr[arr.length - 1] === v) return;
+        arr.push(v);
+        saveHistory(key, arr);
+      }
+
+      function renderHistory(selectEl, key) {
+        const arr = loadHistory(key);
+        selectEl.innerHTML = '';
+        const ph = document.createElement('option');
+        ph.value = '';
+        ph.textContent = arr.length ? `— ${arr.length} entr${arr.length === 1 ? 'y' : 'ies'} —` : '— no history —';
+        ph.selected = true;
+        selectEl.appendChild(ph);
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const opt = document.createElement('option');
+          opt.value = String(i);
+          const flat = arr[i].replace(/\s+/g, ' ');
+          const preview = flat.slice(0, 80);
+          opt.textContent = `${arr.length - i}. ${preview}${flat.length > 80 ? '…' : ''}`;
+          selectEl.appendChild(opt);
+        }
+      }
+
+      function bindHistory({ key, selectId, clearId, getTarget, onLoad }) {
+        const selectEl = document.getElementById(selectId);
+        const clearEl = document.getElementById(clearId);
+        renderHistory(selectEl, key);
+
+        selectEl.onchange = () => {
+          if (selectEl.value === '') return;
+          const arr = loadHistory(key);
+          const idx = parseInt(selectEl.value, 10);
+          if (Number.isFinite(idx) && arr[idx] !== undefined) {
+            const target = getTarget();
+            target.value = arr[idx];
+            if (onLoad) onLoad(arr[idx]);
+            target.focus();
+            try { target.setSelectionRange(target.value.length, target.value.length); } catch {}
+          }
+          selectEl.selectedIndex = 0;
+        };
+
+        clearEl.onmousedown = (e) => e.preventDefault();
+        clearEl.onclick = () => {
+          if (!loadHistory(key).length) return;
+          if (!confirm('Clear this history?')) return;
+          localStorage.removeItem(key);
+          renderHistory(selectEl, key);
+        };
+
+        const target = getTarget();
+        let navIdx = -1;     // -1 = live draft; 0..n-1 = entry from end
+        let savedDraft = '';
+
+        target.addEventListener('keydown', (e) => {
+          if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+          const arr = loadHistory(key);
+          if (!arr.length) return;
+          e.preventDefault();
+          if (e.key === 'ArrowUp') {
+            if (navIdx === -1) savedDraft = target.value;
+            if (navIdx < arr.length - 1) navIdx++;
+            target.value = arr[arr.length - 1 - navIdx];
+          } else {
+            if (navIdx === -1) return;
+            navIdx--;
+            target.value = navIdx === -1 ? savedDraft : arr[arr.length - 1 - navIdx];
+          }
+          if (onLoad) onLoad(target.value);
+          try { target.setSelectionRange(target.value.length, target.value.length); } catch {}
+        });
+
+        target.addEventListener('input', () => { navIdx = -1; });
+
+        return {
+          refresh: () => renderHistory(selectEl, key),
+          resetNav: () => { navIdx = -1; savedDraft = ''; },
+        };
+      }
+
+      /* ====================================
          STT
          ==================================== */
       const input = document.getElementById('prompt-input');
@@ -716,11 +886,21 @@
       let isRecording = false;
       let toggleDictation = () => {};
 
+      const promptHistory = bindHistory({
+        key: HIST_PROMPTS,
+        selectId: 'prompt-history',
+        clearId: 'prompt-history-clear',
+        getTarget: () => input,
+      });
+
       async function submit() {
         const text = input.value.trim();
         if (!text) return;
         if (isRecording) toggleDictation();
         localStorage.setItem('__stts__prompt', input.value);
+        addToHistory(HIST_PROMPTS, text);
+        promptHistory.refresh();
+        promptHistory.resetNav();
         await fetch('/api/complete', { method: 'POST', body: text });
         resetToIdle();
       }
@@ -967,6 +1147,13 @@
 
       let ttsIsRecording = false;
       let ttsToggleDictation = () => {};
+
+      const responseHistory = bindHistory({
+        key: HIST_RESPONSES,
+        selectId: 'response-history',
+        clearId: 'response-history-clear',
+        getTarget: () => ttsTextarea,
+      });
 
       const synth = window.speechSynthesis;
       let currentUtterance = null;
@@ -1264,6 +1451,11 @@
         commandsBtn.style.pointerEvents = 'none';
 
         ttsTextarea.value = config.text || '';
+        if (config.text) {
+          addToHistory(HIST_RESPONSES, config.text);
+          responseHistory.refresh();
+          responseHistory.resetNav();
+        }
         if (config.title) document.title = config.title;
         isOneshot = !!config.oneshot;
         gotitBtn.disabled = false;
