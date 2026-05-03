@@ -33,6 +33,13 @@ function loadHtml(): string {
   return fs.readFileSync(path.resolve(__dirname, 'stts_ui.html'), 'utf-8');
 }
 
+function loadStaticAsset(name: string): Buffer | null {
+  const safe = path.basename(name);
+  const full = path.resolve(__dirname, safe);
+  if (!fs.existsSync(full)) return null;
+  return fs.readFileSync(full);
+}
+
 function getChromeUserDataDir(): string {
   const dir = path.join(tmpdir(), 'cc-gc-stts-user-data-dir');
   mkdirSync(dir, { recursive: true });
@@ -100,6 +107,18 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(loadHtml());
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/sanscript.js') {
+    const data = loadStaticAsset('sanscript.js');
+    if (!data) {
+      res.writeHead(404);
+      res.end('not found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+    res.end(data);
     return;
   }
 

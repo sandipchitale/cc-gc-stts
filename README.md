@@ -16,6 +16,7 @@ Talk to **Claude Code** or **Gemini CLI** and hear them talk back. This project 
 - 🚀 **Persistent Daemon:** Fast startup using a reusable Chrome window.
 - 🛠️ **Cross-Platform:** Works with both Claude Code and Gemini CLI.
 - 🕘 **History:** Recall past prompts and responses from a dropdown above each panel, or with `Alt+↑` / `Alt+↓`.
+- 🌐 **Multilingual:** Per-side **Language** dropdown for English (US), Hindi, and Marathi — in either Devanagari or Latin (ITRANS) script.
 
 ## 🏗️ How It Works
 
@@ -81,6 +82,29 @@ Both STT and TTS modes support voice-activated commands for a hands-free experie
 - `Alt+↑` / `Alt+↓`: Cycle through prompt or response history when the textarea is focused.
 
 ![Voice command side panel](screenshots/stts-voice-commands.png)
+
+## 🌐 Spoken Language
+
+Each panel has a **Lang** dropdown above the textarea. Defaults to **English (US)** on both sides. Available options:
+
+| Option | STT recognition | TTS voice | Script seen in textarea |
+| :--- | :--- | :--- | :--- |
+| English (US) | `en-US` | `en-US` | Latin |
+| Hindi (देवनागरी) | `hi-IN` | `hi-IN` | Devanagari |
+| Hindi (Latin) | `hi-IN` | `hi-IN` | Latin (ITRANS) |
+| Marathi (देवनागरी) | `mr-IN` | `mr-IN` | Devanagari |
+| Marathi (Latin) | `mr-IN` | `mr-IN` | Latin (ITRANS) |
+
+**How the LLM honors the language:** the STT side hands the model text in the chosen script. The model naturally answers in the same language; the response is then read out by a voice that matches the **response** Lang dropdown. For best results pick the same language on both sides.
+
+**Latin variants** use [Sanscript](https://github.com/indic-transliteration/sanscript.js) (loaded from CDN) to transliterate via the ITRANS scheme:
+- **STT → textarea:** Devanagari output from the recognizer is converted to Latin so the prompt the model sees is romanized.
+- **TTS → speech:** if the response text is purely Latin/ITRANS, it is converted to Devanagari before being spoken so the Hindi/Marathi voice pronounces it correctly. Mixed or already-Devanagari text is left alone.
+
+**Caveats:**
+- Web Speech recognition for `hi-IN` and `mr-IN` requires Chrome's network speech service (Google).
+- Voice commands (`send prompt`, `got it`, etc.) are recognized in English only. When you switch the Talk side away from English, use the keyboard / buttons for those actions.
+- Selections persist in `localStorage` (`__stts__lang_prompt`, `__stts__lang_response`).
 
 ## 🕘 Prompt & Response History
 

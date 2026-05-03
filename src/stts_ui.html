@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>STTS</title>
+    <script src="/sanscript.js"></script>
     <style>
       :root {
         --bg-color: #ffffff;
@@ -552,6 +553,19 @@
         border-color: var(--danger-color);
       }
 
+      .lang-select {
+        font-size: 12px;
+        padding: 4px 6px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        font-family: var(--font-stack);
+        cursor: pointer;
+        flex-shrink: 0;
+        max-width: 170px;
+      }
+
       .panel.inactive > .container .history-bar {
         pointer-events: auto;
       }
@@ -564,6 +578,8 @@
       <div class="panel-label" id="stt-label">Talk</div>
       <div class="container" id="stt-container">
         <div class="history-bar">
+          <span class="history-label">Lang</span>
+          <select class="lang-select" id="prompt-lang" title="Spoken language for STT"></select>
           <span class="history-label">History</span>
           <select class="history-select" id="prompt-history" title="Load a past prompt (Alt+Up / Alt+Down also works)"></select>
           <button class="history-clear" id="prompt-history-clear" title="Clear prompt history" tabindex="-1">Clear</button>
@@ -646,6 +662,8 @@
       <div class="panel-label" id="tts-label">Listen</div>
       <div class="container" id="tts-container">
         <div class="history-bar">
+          <span class="history-label">Lang</span>
+          <select class="lang-select" id="response-lang" title="Spoken language for TTS"></select>
           <span class="history-label">History</span>
           <select class="history-select" id="response-history" title="Load a past response (Alt+Up / Alt+Down also works)"></select>
           <button class="history-clear" id="response-history-clear" title="Clear response history" tabindex="-1">Clear</button>
@@ -871,6 +889,113 @@
       }
 
       /* ====================================
+         Spoken language (STT + TTS)
+         ==================================== */
+      const LANGS = {
+        'en-US':      { recoLang: 'en-US', ttsLang: 'en-US', script: 'latn', label: 'English (US)' },
+        'hi-IN-deva': { recoLang: 'hi-IN', ttsLang: 'hi-IN', script: 'deva', label: 'Hindi (देवनागरी)' },
+        'hi-IN-latn': { recoLang: 'hi-IN', ttsLang: 'hi-IN', script: 'latn', label: 'Hindi (Latin)' },
+        'mr-IN-deva': { recoLang: 'mr-IN', ttsLang: 'mr-IN', script: 'deva', label: 'Marathi (देवनागरी)' },
+        'mr-IN-latn': { recoLang: 'mr-IN', ttsLang: 'mr-IN', script: 'latn', label: 'Marathi (Latin)' },
+      };
+      const DEFAULT_LANG = 'en-US';
+      const LANG_PROMPT = '__stts__lang_prompt';
+      const LANG_RESPONSE = '__stts__lang_response';
+      const DEVANAGARI_RE = /[ऀ-ॿ]/;
+
+      function loadLangPref(key) {
+        const v = localStorage.getItem(key);
+        return v && LANGS[v] ? v : DEFAULT_LANG;
+      }
+
+      function saveLangPref(key, value) {
+        if (LANGS[value]) localStorage.setItem(key, value);
+      }
+
+      function populateLangSelect(selectEl, currentValue) {
+        selectEl.innerHTML = '';
+        for (const [key, cfg] of Object.entries(LANGS)) {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = cfg.label;
+          if (key === currentValue) opt.selected = true;
+          selectEl.appendChild(opt);
+        }
+      }
+
+      function getSanscript() {
+        return (window.Sanscript && typeof window.Sanscript.t === 'function') ? window.Sanscript : null;
+      }
+
+      function transliterate(text, from, to) {
+        const S = getSanscript();
+        if (!S) return text;
+        try { return S.t(text, from, to); } catch (e) { console.warn('transliterate failed', e); return text; }
+      }
+
+      // Normalize text to the script the user picked, regardless of source.
+      // - Devanagari variant: ensure text is in Devanagari.
+      // - Latin (ITRANS) variant: ensure text is in Latin (ITRANS).
+      function normalizeForScript(text, langKey) {
+        const cfg = LANGS[langKey];
+        if (!text || !cfg || cfg.recoLang === 'en-US') return text;
+        const hasDeva = DEVANAGARI_RE.test(text);
+        if (cfg.script === 'deva' && !hasDeva) {
+          return transliterate(text, 'itrans', 'devanagari');
+        }
+        if (cfg.script === 'latn' && hasDeva) {
+          return transliterate(text, 'devanagari', 'itrans');
+        }
+        return text;
+      }
+
+      // Backwards-compat alias.
+      const postProcessSttText = normalizeForScript;
+
+      // TTS: Hindi/Marathi voices need Devanagari to pronounce Indic correctly.
+      // Always ensure Devanagari before speaking, regardless of how the text arrived.
+      function preProcessTtsText(text, langKey) {
+        const cfg = LANGS[langKey];
+        if (!cfg || cfg.recoLang === 'en-US') return text;
+        if (!DEVANAGARI_RE.test(text)) {
+          return transliterate(text, 'itrans', 'devanagari');
+        }
+        return text;
+      }
+
+      // Marathi voices are scarce in browser TTS engines; Hindi voices pronounce
+      // Devanagari acceptably, so use Hindi as a fallback for Marathi.
+      const VOICE_FALLBACK = { mr: ['hi'] };
+
+      function pickVoice(voices, ttsLang) {
+        const langPrefix = ttsLang.split('-')[0];
+        const tries = [
+          (v) => v.lang === ttsLang,
+          (v) => v.lang.replace('_', '-') === ttsLang,
+          (v) => v.lang.startsWith(ttsLang),
+          (v) => v.lang.startsWith(langPrefix + '-'),
+          (v) => v.lang.startsWith(langPrefix),
+        ];
+        for (const fb of (VOICE_FALLBACK[langPrefix] || [])) {
+          tries.push((v) => v.lang === fb + '-IN');
+          tries.push((v) => v.lang.startsWith(fb + '-'));
+          tries.push((v) => v.lang.startsWith(fb));
+        }
+        tries.push((v) => v.lang === 'en-US');
+        tries.push((v) => v.lang.startsWith('en'));
+        for (const pred of tries) {
+          const v = voices.find(pred);
+          if (v) return v;
+        }
+        return voices[0] || null;
+      }
+
+      const promptLangSelect = document.getElementById('prompt-lang');
+      const responseLangSelect = document.getElementById('response-lang');
+      populateLangSelect(promptLangSelect, loadLangPref(LANG_PROMPT));
+      populateLangSelect(responseLangSelect, loadLangPref(LANG_RESPONSE));
+
+      /* ====================================
          STT
          ==================================== */
       const input = document.getElementById('prompt-input');
@@ -896,12 +1021,20 @@
       async function submit() {
         const text = input.value.trim();
         if (!text) return;
+
+        const langKey = loadLangPref(LANG_PROMPT);
+        const cfg = LANGS[langKey];
+        let body = text;
+        if (langKey !== 'en-US' && cfg) {
+          body = `(Language: ${cfg.label}) ${text}`;
+        }
+
         if (isRecording) toggleDictation();
         localStorage.setItem('__stts__prompt', input.value);
         addToHistory(HIST_PROMPTS, text);
         promptHistory.refresh();
         promptHistory.resetNav();
-        await fetch('/api/complete', { method: 'POST', body: text });
+        await fetch('/api/complete', { method: 'POST', body });
         resetToIdle();
       }
 
@@ -1036,12 +1169,36 @@
           if (isRecording) {
             recognition.stop();
           } else {
+            recognition.lang = LANGS[loadLangPref(LANG_PROMPT)].recoLang;
             recognition.start();
           }
         };
 
         dictateBtn.onmousedown = (e) => e.preventDefault();
         dictateBtn.onclick = toggleDictation;
+
+        promptLangSelect.onchange = () => {
+          saveLangPref(LANG_PROMPT, promptLangSelect.value);
+          const current = input.value;
+          if (current) {
+            const normalized = normalizeForScript(current, promptLangSelect.value);
+            if (normalized !== current) {
+              isProcessing = true;
+              input.select();
+              document.execCommand('insertText', false, normalized);
+              isProcessing = false;
+            }
+          }
+          if (isRecording) {
+            recognition.stop();
+            setTimeout(() => {
+              try {
+                recognition.lang = LANGS[loadLangPref(LANG_PROMPT)].recoLang;
+                recognition.start();
+              } catch {}
+            }, 150);
+          }
+        };
 
         window.onkeydown = (e) => {
           if (e.ctrlKey && e.key === 'r') {
@@ -1087,7 +1244,17 @@
           }
           if (finalTranscript) {
             isProcessing = true;
-            const { processedText, replaceSelection, effects, deletesSelection } = extractCommands(finalTranscript);
+            const langKey = loadLangPref(LANG_PROMPT);
+            const cfg = LANGS[langKey];
+            let processedText, replaceSelection, effects, deletesSelection;
+            if (cfg.recoLang === 'en-US') {
+              ({ processedText, replaceSelection, effects, deletesSelection } = extractCommands(finalTranscript));
+            } else {
+              processedText = postProcessSttText(finalTranscript, langKey);
+              replaceSelection = true;
+              effects = [];
+              deletesSelection = false;
+            }
             const start = input.selectionStart;
             const end = input.selectionEnd;
             const hasSelection = start !== end;
@@ -1154,6 +1321,15 @@
         clearId: 'response-history-clear',
         getTarget: () => ttsTextarea,
       });
+
+      responseLangSelect.onchange = () => {
+        saveLangPref(LANG_RESPONSE, responseLangSelect.value);
+        const current = ttsTextarea.value;
+        if (current) {
+          const normalized = normalizeForScript(current, responseLangSelect.value);
+          if (normalized !== current) ttsTextarea.value = normalized;
+        }
+      };
 
       const synth = window.speechSynthesis;
       let currentUtterance = null;
@@ -1280,8 +1456,8 @@
       };
 
       function startSpeaking() {
-        const textToSpeak = ttsTextarea.value.trim();
-        if (hasStarted || !textToSpeak) return;
+        const rawText = ttsTextarea.value.trim();
+        if (hasStarted || !rawText) return;
 
         const voices = synth.getVoices();
         if (voices.length === 0) {
@@ -1297,15 +1473,18 @@
 
         synth.cancel();
 
+        const langKey = loadLangPref(LANG_RESPONSE);
+        const cfg = LANGS[langKey];
+        const textToSpeak = preProcessTtsText(rawText, langKey);
+
         currentUtterance = new SpeechSynthesisUtterance(textToSpeak);
-
-        const voice =
-          voices.find((v) => v.lang === 'en-US') ||
-          voices.find((v) => v.lang.startsWith('en-US')) ||
-          voices.find((v) => v.lang.startsWith('en')) ||
-          voices[0];
-
-        if (voice) currentUtterance.voice = voice;
+        const voice = pickVoice(voices, cfg.ttsLang);
+        if (voice) {
+          currentUtterance.voice = voice;
+          currentUtterance.lang = voice.lang.replace('_', '-');
+        } else {
+          currentUtterance.lang = cfg.ttsLang;
+        }
 
         currentUtterance.onstart = () => {
           ttsContainer.classList.add('speaking');
@@ -1450,9 +1629,11 @@
         commandsBtn.style.opacity = '0.4';
         commandsBtn.style.pointerEvents = 'none';
 
-        ttsTextarea.value = config.text || '';
-        if (config.text) {
-          addToHistory(HIST_RESPONSES, config.text);
+        const incoming = config.text || '';
+        const responseLangKey = loadLangPref(LANG_RESPONSE);
+        ttsTextarea.value = normalizeForScript(incoming, responseLangKey);
+        if (incoming) {
+          addToHistory(HIST_RESPONSES, incoming);
           responseHistory.refresh();
           responseHistory.resetNav();
         }
