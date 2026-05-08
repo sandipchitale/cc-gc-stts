@@ -16,11 +16,13 @@
   "type": "module",
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/ws": "^8.5.13",
     "esbuild": "^0.25.12"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "chrome-launcher": "^1.2.1",
-    "commander": "^14.0.3"
+    "commander": "^14.0.3",
+    "ws": "^8.18.0"
   }
 }

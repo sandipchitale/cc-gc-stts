@@ -747,17 +747,27 @@
       });
 
       /* ====================================
-         End conversation
+         WebSocket transport
          ==================================== */
       let currentMode = null;
+      let socket = null;
 
+      function sendSocket(msg) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify(msg));
+        }
+      }
+
+      /* ====================================
+         End conversation
+         ==================================== */
       document.getElementById('end-btn').onclick = async () => {
         if (isRecording) toggleDictation();
         synth.cancel();
         if (currentMode === 'tts') {
-          await fetch('/api/close', { method: 'POST' });
+          sendSocket({ type: 'close' });
         } else if (currentMode === 'stt') {
-          await fetch('/api/cancel', { method: 'POST' });
+          sendSocket({ type: 'cancel' });
         }
         await fetch('/api/shutdown', { method: 'POST' }).catch(() => {});
         document.title = 'Conversation ended';
@@ -901,13 +911,13 @@
         addToHistory(HIST_PROMPTS, text);
         promptHistory.refresh();
         promptHistory.resetNav();
-        await fetch('/api/complete', { method: 'POST', body: text });
+        sendSocket({ type: 'complete', text });
         resetToIdle();
       }
 
       async function cancel() {
         if (isRecording) toggleDictation();
-        await fetch('/api/cancel', { method: 'POST' });
+        sendSocket({ type: 'cancel' });
         resetToIdle();
       }
 
@@ -1159,6 +1169,7 @@
       let currentUtterance = null;
       let hasStarted = false;
       let isOneshot = false;
+      let userInteracted = false;
       let isRestarting = false;
 
       // TTS Commands
@@ -1251,6 +1262,7 @@
       };
 
       playBtn.onclick = () => {
+        userInteracted = true;
         hasStarted = false;
         isRestarting = true;
         synth.cancel();
@@ -1259,6 +1271,7 @@
       };
 
       function stopSpeaking() {
+        userInteracted = true;
         synth.cancel();
         isOneshot = false;
         hasStarted = false;
@@ -1271,13 +1284,15 @@
 
       stopBtn.onclick = stopSpeaking;
 
-      gotitBtn.onclick = async () => {
+      function autoOrManualClose() {
         synth.cancel();
         if (ttsIsRecording) { try { ttsToggleDictation(); } catch {} }
         gotitBtn.disabled = true;
-        await fetch('/api/close', { method: 'POST' });
+        sendSocket({ type: 'close' });
         resetToIdle();
-      };
+      }
+
+      gotitBtn.onclick = autoOrManualClose;
 
       function startSpeaking() {
         const textToSpeak = ttsTextarea.value.trim();
@@ -1315,10 +1330,15 @@
         currentUtterance.onend = () => {
           ttsContainer.classList.remove('speaking');
           bars.forEach((b) => b.classList.remove('animating'));
-          ttsStatus.textContent = 'Finished. Play again or click "Got it!" to continue.';
           playBtn.disabled = false;
           stopBtn.disabled = true;
           hasStarted = false;
+          if (currentMode === 'tts' && isOneshot && !userInteracted) {
+            ttsStatus.textContent = 'Finished. Continuing...';
+            autoOrManualClose();
+          } else {
+            ttsStatus.textContent = 'Finished. Play again or click "Got it!" to continue.';
+          }
         };
 
         currentUtterance.onerror = (e) => {
@@ -1458,6 +1478,7 @@
         }
         if (config.title) document.title = config.title;
         isOneshot = !!config.oneshot;
+        userInteracted = false;
         gotitBtn.disabled = false;
         hasStarted = false;
         playBtn.disabled = false;
@@ -1483,29 +1504,27 @@
         }, 5000);
       }
 
-      async function waitLoop() {
+      function connectSocket() {
         resetToIdle();
-        while (true) {
-          let config;
-          try {
-            const resp = await fetch('/api/wait');
-            if (!resp.ok) throw new Error('wait failed: ' + resp.status);
-            config = await resp.json();
-          } catch (e) {
-            console.error('wait error', e);
-            await new Promise((r) => setTimeout(r, 1000));
-            continue;
-          }
-          if (config.mode === 'stt') activateStt(config);
-          else if (config.mode === 'tts') await activateTts(config);
-          // Await user interaction; resetToIdle() is called by submit/cancel/close/gotit.
-          while (currentMode !== null) {
-            await new Promise((r) => setTimeout(r, 100));
-          }
-        }
+        const ws = new WebSocket(`ws://${location.host}/ws`);
+        socket = ws;
+        ws.onopen = () => sendSocket({ type: 'ready' });
+        ws.onmessage = (ev) => {
+          let msg;
+          try { msg = JSON.parse(ev.data); } catch { return; }
+          if (msg.type !== 'request' || !msg.config) return;
+          if (currentMode !== null) resetToIdle();
+          if (msg.config.mode === 'stt') activateStt(msg.config);
+          else if (msg.config.mode === 'tts') activateTts(msg.config);
+        };
+        ws.onclose = () => {
+          if (socket === ws) socket = null;
+          setTimeout(connectSocket, 500);
+        };
+        ws.onerror = () => { try { ws.close(); } catch {} };
       }
 
-      waitLoop();
+      connectSocket();
     </script>
   </body>
 </html>

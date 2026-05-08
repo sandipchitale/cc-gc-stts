@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import * as ChromeLauncher from 'chrome-launcher';
+import { WebSocketServer, WebSocket } from 'ws';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,7 +26,7 @@ type Pending = {
 };
 
 let pending: Pending | null = null;
-let pageWaiter: ((cfg: RequestConfig) => void) | null = null;
+let pageSocket: WebSocket | null = null;
 let chrome: ChromeLauncher.LaunchedChrome | null = null;
 let chromeLaunching: Promise<void> | null = null;
 
@@ -74,6 +75,10 @@ async function ensureChrome() {
       });
       chrome.process.on('exit', () => {
         chrome = null;
+        if (pageSocket) {
+          try { pageSocket.close(); } catch {}
+          pageSocket = null;
+        }
         if (pending) {
           const p = pending;
           pending = null;
@@ -88,10 +93,15 @@ async function ensureChrome() {
 }
 
 function deliverToPage() {
-  if (!pending || !pageWaiter) return;
-  const w = pageWaiter;
-  pageWaiter = null;
-  w(pending.config);
+  if (!pending || !pageSocket || pageSocket.readyState !== WebSocket.OPEN) return;
+  pageSocket.send(JSON.stringify({ type: 'request', config: pending.config }));
+}
+
+function resolvePending(text: string) {
+  if (!pending) return;
+  const p = pending;
+  pending = null;
+  p.respond(text);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -154,42 +164,44 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/wait') {
-    if (pending) {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(pending.config));
-      return;
-    }
-    const waiter = (cfg: RequestConfig) => {
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(cfg));
-    };
-    pageWaiter = waiter;
-    req.on('close', () => {
-      if (pageWaiter === waiter) pageWaiter = null;
-    });
-    return;
-  }
-
-  if (
-    req.method === 'POST' &&
-    (url.pathname === '/api/complete' ||
-      url.pathname === '/api/cancel' ||
-      url.pathname === '/api/close')
-  ) {
-    const text = url.pathname === '/api/complete' ? await readBody(req) : '';
-    res.writeHead(200);
-    res.end('ok');
-    if (pending) {
-      const p = pending;
-      pending = null;
-      p.respond(text);
-    }
-    return;
-  }
-
   res.writeHead(404);
   res.end('Not found');
+});
+
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+wss.on('connection', (socket) => {
+  if (pageSocket && pageSocket !== socket && pageSocket.readyState === WebSocket.OPEN) {
+    try { pageSocket.close(4000, 'replaced'); } catch {}
+  }
+  pageSocket = socket;
+
+  socket.on('message', (raw) => {
+    let msg: { type?: string; text?: string };
+    try {
+      msg = JSON.parse(raw.toString('utf-8'));
+    } catch {
+      return;
+    }
+    switch (msg.type) {
+      case 'ready':
+        deliverToPage();
+        return;
+      case 'complete':
+        resolvePending(typeof msg.text === 'string' ? msg.text : '');
+        return;
+      case 'cancel':
+      case 'close':
+        resolvePending('');
+        return;
+    }
+  });
+
+  const detach = () => {
+    if (pageSocket === socket) pageSocket = null;
+  };
+  socket.on('close', detach);
+  socket.on('error', detach);
 });
 
 server.requestTimeout = 0;
